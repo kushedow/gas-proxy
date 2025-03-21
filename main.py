@@ -1,8 +1,15 @@
+import os
+import logging
+
 from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.responses import Response
+from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 import httpx
-import logging
+
+from starlette.responses import JSONResponse
+
+from openai import OpenAI
 
 app = FastAPI()
 
@@ -18,12 +25,33 @@ app.add_middleware(
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+
 async def create_httpx_client():
     """Creates an httpx client with desired configurations."""
     return httpx.AsyncClient(
         follow_redirects=True,
         timeout=60.0,
     )
+
+
+class AIRequest(BaseModel):
+    prompt: str
+
+
+open_ai = OpenAI(os.getenv("OPENAIKEY"))
+
+
+@app.post("/generate")
+async def generate_text(request: AIRequest):
+    """
+    Generates text using the Gemini model based on the provided prompt.
+    """
+
+    prompt: str = request.prompt
+    logging.info(f"Received prompt: {prompt}")
+    response: str = open_ai.get_response(prompt)
+    return JSONResponse(content={"response": response})
+
 
 @app.get("/{serviceid:str}")
 async def get_proxy(serviceid: str, request: Request, client: httpx.AsyncClient = Depends(create_httpx_client)):
@@ -32,7 +60,7 @@ async def get_proxy(serviceid: str, request: Request, client: httpx.AsyncClient 
     query_params = request.query_params
 
     if query_params:
-      target_url += "?" + str(query_params) # string conversion required
+        target_url += "?" + str(query_params)  # string conversion required
 
     logging.info(f"GET Proxying to: {target_url}")
 
@@ -55,4 +83,5 @@ async def get_proxy(serviceid: str, request: Request, client: httpx.AsyncClient 
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
