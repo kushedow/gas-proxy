@@ -44,7 +44,7 @@ open_ai = OpenAI(os.getenv("OPENAIKEY"))
 @app.post("/generate")
 async def generate_text(request: AIRequest):
     """
-    Generates text using the Gemini model based on the provided prompt.
+    Generates text using the Open AI model based on the provided prompt.
     """
 
     prompt: str = request.prompt
@@ -53,10 +53,16 @@ async def generate_text(request: AIRequest):
     return JSONResponse(content={"response": response})
 
 
-@app.get("/{serviceid:str}")
-async def get_proxy(serviceid: str, request: Request, client: httpx.AsyncClient = Depends(create_httpx_client)):
+@app.get("/{serviceid:str}/")
+@app.get("/{serviceid:str}/{path:path}")
+async def get_proxy(serviceid: str, path: str = None, request: Request= None, client: httpx.AsyncClient = Depends(create_httpx_client)):
     """Proxies GET requests to the Google Apps Script web app."""
-    target_url = f"https://script.google.com/macros/s/{serviceid}/exec"
+
+    if path is None:
+        target_url = f"https://script.google.com/macros/s/{serviceid}/exec"
+    else:
+        target_url = f"https://script.google.com/macros/s/{serviceid}/exec?query=/{path}"
+
     query_params = request.query_params
 
     if query_params:
@@ -79,6 +85,7 @@ async def get_proxy(serviceid: str, request: Request, client: httpx.AsyncClient 
     except Exception as e:
         logging.exception(f"Unexpected error: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
 
 
 if __name__ == "__main__":
